@@ -6,21 +6,14 @@ const logFormat = printf(({ level, message, timestamp }) => {
 });
 
 const logger = createLogger({
-  level: 'info',
+  level: process.env.LOG_LEVEL || 'info',
   format: combine(
     timestamp(),
     logFormat
   ),
   transports: [
-    new transports.Console(),
-    new transports.File({ filename: 'pool-monitor.log' })
+    new transports.Console()
   ]
 });
 
-const logInfo = (message) => {
-  logger.info(message);
-};
-
-module.exports = {
-  logInfo
-};
+module.exports = logger;

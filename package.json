@@ -1,8 +1,28 @@
 {
+  "name": "nodejs-pool-monitor",
+  "version": "1.0.0",
+  "description": "Your app description",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "lint": "eslint '**/*.js'",
+    "test": "mocha",
+    "format": "prettier --write '**/*.js'"
+  },
   "dependencies": {
     "axios": "^1.7.3",
     "dotenv": "^16.4.5",
     "mqtt": "^5.9.1",
     "winston": "^3.13.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.9.0",
+    "chai": "^4.3.7",
+    "eslint": "^9.9.0",
+    "globals": "^15.9.0",
+    "mocha": "^10.2.0",
+    "nodemon": "^3.1.4",
+    "prettier": "^3.0.1"
   }
 }
