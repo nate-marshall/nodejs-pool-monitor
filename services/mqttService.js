@@ -6,6 +6,7 @@ const logService = require('../services/logService');
 const orpTopic = process.env.MQTT_ORP_TOPIC || 'default/orp/topic';
 const phTopic = process.env.MQTT_PH_TOPIC || 'default/ph/topic';
 const rpmTopic = process.env.MQTT_RPM_TOPIC || 'default/rpm/topic';
+const waterFlowTopic = process.env.MQTT_WATER_FLOW_TOPIC || 'default/waterFlow/topic';
 
 const client = mqtt.connect(config.mqtt.brokerUrl, {
     username: config.mqtt.username,
@@ -47,6 +48,16 @@ client.on('connect', () => {
             logService.error(`Failed to subscribe to RPM topic: ${err.message}`);
         }
     });
+
+    logService.debug('Attempting to subscribe to Water Flow topic...');
+    client.subscribe(waterFlowTopic, (err) => {
+        if (!err) {
+            logService.debug(`Successfully subscribed to Water Flow topic: ${waterFlowTopic}`);
+        } else {
+            logService.error(`Failed to subscribe to Water Flow topic: ${err.message}`);
+        }
+    });
+
 });
 
 client.on('error', (error) => {

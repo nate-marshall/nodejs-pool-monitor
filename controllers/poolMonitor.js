@@ -15,6 +15,30 @@ let lastAlertTime = 0;
 let failureCount = 0;
 let waterFlowOffSince = null;
 
+mqttService.on('message', (topic, message) => {
+    const parsedMessage = JSON.parse(message.toString());
+    if (topic === config.mqtt.topics.orp) {
+        orpLevel = parsedMessage.orpLevel;
+        logService.debug(`Received ORP level: ${orpLevel}`);
+    } else if (topic === config.mqtt.topics.waterFlow) {
+        waterFlow = parsedMessage.name;
+        logService.debug(`Received water flow status: ${waterFlow}`);
+    } else if (topic === config.mqtt.topics.ph) {
+        phLevel = parsedMessage.pHLevel;
+        logService.debug(`Received pH level: ${phLevel}`);
+    } else if (topic === config.mqtt.topics.rpm) {
+        rpm = parsedMessage.rpm;
+        logService.debug(`Received RPM: ${rpm}`);
+        if (rpm > config.monitoring.pumpRpmSpeed && !monitoringIntervalId) {
+            logService.info(`Starting monitoring... Pump ${rpm} and Flow ${waterFlow}`);
+            startMonitoring();
+        } else if (rpm === config.monitoring.pumpRpmSpeed && monitoringIntervalId) {
+            logService.info('Pump stopped. Stopping monitoring...');
+            stopMonitoring();
+        }
+    }
+});
+
 async function sendRemResetCommand() {
     try {
         const response = await axios.put(`${config.remController.url}/config/reset`, {
@@ -55,16 +79,10 @@ async function sendAlertAndReset(message, orpLevel, phLevel) {
 }
 
 function checkPumpAndWaterFlow(currentTime) {
-    if (rpm > 0 && waterFlow === 'off') {
+    if (rpm > config.monitoring.pumpRpmSpeed && waterFlow === 'ok') {
         if (!waterFlowOffSince) {
             waterFlowOffSince = currentTime;
-        }
-
-        const timeSinceWaterFlowOff = currentTime - waterFlowOffSince;
-
-        if (timeSinceWaterFlowOff >= config.monitoring.waterFlowCheckInterval) {
-            sendRemResetCommand();
-            waterFlowOffSince = currentTime;
+            logService.info(`Water flow check 1 RPM: ${rpm}`)
         }
     } else {
         waterFlowOffSince = null;
@@ -105,44 +123,16 @@ function startMonitoring() {
                 logService.error(`Failed to send alert and reset: ${error.message}`);
             }
         }
-
+        checkPumpAndWaterFlow(currentTime);
         logService.info(`Monitoring - ORP: ${currentOrpLevel}, pH: ${currentPhLevel}`);
 
         previousOrpLevel = currentOrpLevel;
         previousPhLevel = currentPhLevel;
 
-        checkPumpAndWaterFlow(currentTime);
-
     }, delay);
 
     logService.info('Started monitoring with a delay of ' + delayInSeconds + ' seconds.');
 }
-
-mqttService.on('message', (topic, message) => {
-    const parsedMessage = JSON.parse(message.toString());
-
-    if (topic === config.mqtt.topics.orp) {
-        orpLevel = parsedMessage.orpLevel;
-        logService.debug(`Received ORP level: ${orpLevel}`);
-    } else if (topic === config.mqtt.topics.ph) {
-        phLevel = parsedMessage.pHLevel;
-        logService.debug(`Received pH level: ${phLevel}`);
-    } else if (topic === config.mqtt.topics.rpm) {
-        rpm = parsedMessage.rpm;
-        logService.debug(`Received RPM: ${rpm}`);
-        
-        if (rpm > config.monitoring.pumpRpmSpeed && !monitoringIntervalId) {
-            logService.info('Pump is running. Starting monitoring...');
-            startMonitoring();
-        } else if (rpm === 0 && monitoringIntervalId) {
-            logService.info('Pump stopped. Stopping monitoring...');
-            stopMonitoring();
-        }
-    } else if (topic === config.mqtt.topics.waterFlow) {
-        waterFlow = parsedMessage.waterFlow;
-        logService.debug(`Received water flow status: ${waterFlow}`);
-    }
-});
 
 function stopMonitoring() {
     if (monitoringIntervalId) {
