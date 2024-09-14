@@ -11,8 +11,10 @@ const client = mqtt.connect(config.mqtt.brokerUrl, {
     username: config.mqtt.username,
     password: config.mqtt.password,
     clientId: config.mqtt.clientId,
-    clean: true,
+    clean: false,
     connectTimeout: config.mqtt.connectTimeout,
+    keepalive: 120,
+    reconnectPeriod: 5000,
 });
 
 client.on('connect', () => {
@@ -27,7 +29,8 @@ client.on('connect', () => {
             logService.error(`Failed to subscribe to ORP topic: ${err.message}`);
         }
     });
-    
+
+    logService.debug('Attempting to subscribe to pH topic...');
     client.subscribe(phTopic, (err) => {
         if (!err) {
             logService.debug(`Successfully subscribed to pH topic: ${phTopic}`);
@@ -36,6 +39,7 @@ client.on('connect', () => {
         }
     });
 
+    logService.debug('Attempting to subscribe to RPM topic...');
     client.subscribe(rpmTopic, (err) => {
         if (!err) {
             logService.debug(`Successfully subscribed to RPM topic: ${rpmTopic}`);
@@ -47,7 +51,7 @@ client.on('connect', () => {
 
 client.on('error', (error) => {
     logService.error(`MQTT connection error: ${error.message}`);
-    client.end(); // Close the connection on error
+    client.end();
 });
 
 client.on('reconnect', () => {

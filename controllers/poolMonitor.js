@@ -131,7 +131,7 @@ mqttService.on('message', (topic, message) => {
         rpm = parsedMessage.rpm;
         logService.debug(`Received RPM: ${rpm}`);
         
-        if (rpm > 0 && !monitoringIntervalId) {
+        if (rpm > config.monitoring.pumpRpmSpeed && !monitoringIntervalId) {
             logService.info('Pump is running. Starting monitoring...');
             startMonitoring();
         } else if (rpm === 0 && monitoringIntervalId) {

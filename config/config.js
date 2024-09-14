@@ -19,9 +19,10 @@ module.exports = {
     webhookUrl: process.env.MATTERMOST_WEBHOOK_URL
   },
   monitoring: {
-    threshold: parseInt(process.env.ALERT_INTERVAL, 10) || 10,  // in seconds
-    failureCount: parseInt(process.env.FAILURE_COUNT, 10) || 3, // Default to 3 failures
-    tolerance: parseFloat(process.env.SENSOR_VALUE_TOLERANCE) || 0.001 // acceptable change before considering it as unchanged
+    threshold: parseInt(process.env.ALERT_INTERVAL, 10) || 10,
+    failureCount: parseInt(process.env.FAILURE_COUNT, 10) || 3,
+    tolerance: parseFloat(process.env.SENSOR_VALUE_TOLERANCE) || 0.001,
+    pumpRpmSpeed: parseFloat(process.env.PUMP_RPM_SPEED_CHECK) || 1500
   },
   remController: {
     url: process.env.REM_CONTROLLER_URL || 'http://127.0.0.1:8080'
