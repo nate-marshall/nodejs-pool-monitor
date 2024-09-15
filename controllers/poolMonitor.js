@@ -35,7 +35,6 @@ mqttService.on('message', (topic, message) => {
             poolState.rpm = parsedMessage.rpm;
             logService.debug(`Received RPM: ${poolState.rpm}`);
             if (poolState.rpm > config.monitoring.pumpRpmSpeed && !monitoringIntervalId) {
-                logService.info(`Started monitoring`);
                 startMonitoring();
             } else if (poolState.rpm === config.monitoring.pumpRpmSpeed && monitoringIntervalId) {
                 logService.info('Pump stopped. Stopping monitoring.');
@@ -134,7 +133,14 @@ function startMonitoring() {
         }
 
         checkPumpAndWaterFlow(currentTime);
-        logService.info(`Monitoring - ORP: ${orpLevel}, pH: ${phLevel}, RPM: ${poolState.rpm}, Water Flow: ${poolState.waterFlow}`);
+        logService.info({
+            metrics: {
+              orp: orpLevel,
+              ph: phLevel,
+              rpm: poolState.rpm,
+              waterFlow: poolState.waterFlow
+            }
+          });
 
         poolState.previousOrpLevel = orpLevel;
         poolState.previousPhLevel = phLevel;
