@@ -4,41 +4,50 @@ const logService = require('../services/logService');
 const axios = require('axios');
 const config = require('../config/config');
 
-let orpLevel = null;
-let phLevel = null;
-let rpm = null;
-let waterFlow = null;
-let previousOrpLevel = null;
-let previousPhLevel = null;
+let poolState = {
+    orpLevel: null,
+    phLevel: null,
+    rpm: null,
+    waterFlow: null,
+    previousOrpLevel: null,
+    previousPhLevel: null
+};
+
 let monitoringIntervalId = null;
 let lastAlertTime = 0;
 let failureCount = 0;
 let waterFlowOffSince = null;
 
+// Event handling for incoming MQTT messages
 mqttService.on('message', (topic, message) => {
-    const parsedMessage = JSON.parse(message.toString());
-    if (topic === config.mqtt.topics.orp) {
-        orpLevel = parsedMessage.orpLevel;
-        logService.debug(`Received ORP level: ${orpLevel}`);
-    } else if (topic === config.mqtt.topics.waterFlow) {
-        waterFlow = parsedMessage.name;
-        logService.debug(`Received water flow status: ${waterFlow}`);
-    } else if (topic === config.mqtt.topics.ph) {
-        phLevel = parsedMessage.pHLevel;
-        logService.debug(`Received pH level: ${phLevel}`);
-    } else if (topic === config.mqtt.topics.rpm) {
-        rpm = parsedMessage.rpm;
-        logService.debug(`Received RPM: ${rpm}`);
-        if (rpm > config.monitoring.pumpRpmSpeed && !monitoringIntervalId) {
-            logService.info(`Starting monitoring... Pump ${rpm} and Flow ${waterFlow}`);
-            startMonitoring();
-        } else if (rpm === config.monitoring.pumpRpmSpeed && monitoringIntervalId) {
-            logService.info('Pump stopped. Stopping monitoring...');
-            stopMonitoring();
+    try {
+        const parsedMessage = JSON.parse(message.toString());
+        if (topic === config.mqtt.topics.orp) {
+            poolState.orpLevel = parsedMessage.orpLevel;
+            logService.debug(`Received ORP level: ${poolState.orpLevel}`);
+        } else if (topic === config.mqtt.topics.waterFlow) {
+            poolState.waterFlow = parsedMessage.name;
+            logService.debug(`Received water flow status: ${poolState.waterFlow}`);
+        } else if (topic === config.mqtt.topics.ph) {
+            poolState.phLevel = parsedMessage.pHLevel;
+            logService.debug(`Received pH level: ${poolState.phLevel}`);
+        } else if (topic === config.mqtt.topics.rpm) {
+            poolState.rpm = parsedMessage.rpm;
+            logService.debug(`Received RPM: ${poolState.rpm}`);
+            if (poolState.rpm > config.monitoring.pumpRpmSpeed && !monitoringIntervalId) {
+                logService.info(`Started monitoring`);
+                startMonitoring();
+            } else if (poolState.rpm === config.monitoring.pumpRpmSpeed && monitoringIntervalId) {
+                logService.info('Pump stopped. Stopping monitoring.');
+                stopMonitoring();
+            }
         }
+    } catch (error) {
+        logService.error(`Failed to parse MQTT message: ${error.message}`);
     }
 });
 
+// Sending the reset command
 async function sendRemResetCommand() {
     try {
         const response = await axios.put(`${config.remController.url}/config/reset`, {
@@ -56,21 +65,19 @@ async function sendRemResetCommand() {
                 'Content-Type': 'application/json; charset=UTF-8',
                 'Origin': config.remController.url,
                 'Referer': `${config.remController.url}/`,
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
-                'X-Requested-With': 'XMLHttpRequest'
+                'User-Agent': 'Mozilla/5.0'
             }
         });
-
         logService.info('Reset command sent successfully.');
     } catch (error) {
         const errorMessage = `Failed to send reset command: ${error.message}`;
         logService.error(errorMessage);
-
         alertService.sendAlert(errorMessage);
         logService.info(`Alert sent to Mattermost: ${errorMessage}`);
     }
 }
 
+// Sending an alert and resetting
 async function sendAlertAndReset(message, orpLevel, phLevel) {
     const alertMessage = `${message} ORP: ${orpLevel}, pH: ${phLevel}`;
     alertService.sendAlert(alertMessage);
@@ -78,17 +85,19 @@ async function sendAlertAndReset(message, orpLevel, phLevel) {
     await sendRemResetCommand();
 }
 
+// Pump and water flow checks
 function checkPumpAndWaterFlow(currentTime) {
-    if (rpm > config.monitoring.pumpRpmSpeed && waterFlow === 'ok') {
+    if (poolState.rpm > config.monitoring.pumpRpmSpeed && poolState.waterFlow === 'off') {
         if (!waterFlowOffSince) {
             waterFlowOffSince = currentTime;
-            logService.info(`Water flow check 1 RPM: ${rpm}`)
+            logService.debug(`Water flow check. RPM: ${rpm}`)
         }
     } else {
         waterFlowOffSince = null;
     }
 }
 
+// Monitoring function
 function startMonitoring() {
     const delayInSeconds = config.monitoring.threshold;
     const delay = delayInSeconds * 1000;
@@ -101,12 +110,12 @@ function startMonitoring() {
     }
 
     monitoringIntervalId = setInterval(async () => {
-        const currentOrpLevel = orpLevel;
-        const currentPhLevel = phLevel;
+        const { orpLevel, phLevel, previousOrpLevel, previousPhLevel } = poolState;
         const currentTime = Date.now();
         const timeSinceLastAlert = currentTime - lastAlertTime;
-        const orpChanged = Math.abs(previousOrpLevel - currentOrpLevel) > tolerance;
-        const phChanged = Math.abs(previousPhLevel - currentPhLevel) > tolerance;
+
+        const orpChanged = Math.abs(previousOrpLevel - orpLevel) > tolerance;
+        const phChanged = Math.abs(previousPhLevel - phLevel) > tolerance;
 
         if (!orpChanged && !phChanged) {
             failureCount++;
@@ -116,18 +125,19 @@ function startMonitoring() {
 
         if (failureCount >= maxFailures && timeSinceLastAlert > delay) {
             try {
-                await sendAlertAndReset('ORP and pH levels have not changed.', currentOrpLevel, currentPhLevel);
+                await sendAlertAndReset('ORP and pH levels have not changed.', orpLevel, phLevel);
                 lastAlertTime = currentTime;
                 failureCount = 0;
             } catch (error) {
                 logService.error(`Failed to send alert and reset: ${error.message}`);
             }
         }
-        checkPumpAndWaterFlow(currentTime);
-        logService.info(`Monitoring - ORP: ${currentOrpLevel}, pH: ${currentPhLevel}`);
 
-        previousOrpLevel = currentOrpLevel;
-        previousPhLevel = currentPhLevel;
+        checkPumpAndWaterFlow(currentTime);
+        logService.info(`Monitoring - ORP: ${orpLevel}, pH: ${phLevel}, RPM: ${poolState.rpm}, Water Flow: ${poolState.waterFlow}`);
+
+        poolState.previousOrpLevel = orpLevel;
+        poolState.previousPhLevel = phLevel;
 
     }, delay);
 
