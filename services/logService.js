@@ -5,7 +5,7 @@ const logger = createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: combine(
     timestamp(),
-    json()  // Use JSON format
+    json()
   ),
   transports: [
     new transports.Console()

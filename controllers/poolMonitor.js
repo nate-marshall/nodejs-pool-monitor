@@ -16,7 +16,6 @@ let poolState = {
 let monitoringIntervalId = null;
 let lastAlertTime = 0;
 let failureCount = 0;
-let waterFlowOffSince = null;
 
 // Event handling for incoming MQTT messages
 mqttService.on('message', (topic, message) => {
@@ -84,15 +83,11 @@ async function sendAlertAndReset(message, orpLevel, phLevel) {
     await sendRemResetCommand();
 }
 
-// Pump and water flow checks
 function checkPumpAndWaterFlow(currentTime) {
-    if (poolState.rpm > config.monitoring.pumpRpmSpeed && poolState.waterFlow === 'off') {
-        if (!waterFlowOffSince) {
-            waterFlowOffSince = currentTime;
-            logService.debug(`Water flow check. RPM: ${rpm}`)
-        }
-    } else {
-        waterFlowOffSince = null;
+    if (poolState.rpm > config.monitoring.pumpRpmSpeed && poolState.waterFlow !== 'on') {
+        logService.warn('Pump is running but no water flow detected. Resetting flow switch...');
+        sendRemResetCommand();
+        lastAlertTime = currentTime;
     }
 }
 
@@ -102,14 +97,22 @@ function startMonitoring() {
     const delay = delayInSeconds * 1000;
     const tolerance = config.monitoring.tolerance;
     const maxFailures = config.monitoring.failureCount;
+    const throttleDurationInSeconds = config.monitoring.alertThrottleTimer;
+    const throttleDuration = throttleDurationInSeconds * 1000;  // Convert to milliseconds
 
     if (monitoringIntervalId) {
         logService.warn('Monitoring is already running.');
         return;
     }
-
     monitoringIntervalId = setInterval(async () => {
-        const { orpLevel, phLevel, previousOrpLevel, previousPhLevel } = poolState;
+        const { 
+            orpLevel,
+            phLevel,
+            waterFlow,
+            rpm,
+            previousOrpLevel,
+            previousPhLevel
+         } = poolState;
         const currentTime = Date.now();
         const timeSinceLastAlert = currentTime - lastAlertTime;
 
@@ -122,7 +125,8 @@ function startMonitoring() {
             failureCount = 0;
         }
 
-        if (failureCount >= maxFailures && timeSinceLastAlert > delay) {
+        // Throttle alerts
+        if (failureCount >= maxFailures && timeSinceLastAlert > throttleDuration) {
             try {
                 await sendAlertAndReset('ORP and pH levels have not changed.', orpLevel, phLevel);
                 lastAlertTime = currentTime;
@@ -131,24 +135,21 @@ function startMonitoring() {
                 logService.error(`Failed to send alert and reset: ${error.message}`);
             }
         }
-
         checkPumpAndWaterFlow(currentTime);
         logService.info({
             metrics: {
-              orp: orpLevel,
-              ph: phLevel,
-              rpm: poolState.rpm,
-              waterFlow: poolState.waterFlow
+                orp: orpLevel,
+                ph: phLevel,
+                rpm: rpm,
+                waterFlow: waterFlow
             }
-          });
-
+        });
         poolState.previousOrpLevel = orpLevel;
         poolState.previousPhLevel = phLevel;
-
     }, delay);
-
     logService.info('Started monitoring with a delay of ' + delayInSeconds + ' seconds.');
 }
+
 
 function stopMonitoring() {
     if (monitoringIntervalId) {

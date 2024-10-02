@@ -22,7 +22,8 @@ module.exports = {
     threshold: parseInt(process.env.ALERT_INTERVAL, 10) || 10,
     failureCount: parseInt(process.env.FAILURE_COUNT, 10) || 3,
     tolerance: parseFloat(process.env.SENSOR_VALUE_TOLERANCE) || 0.001,
-    pumpRpmSpeed: parseFloat(process.env.PUMP_RPM_SPEED_CHECK) || 1500
+    pumpRpmSpeed: parseFloat(process.env.PUMP_RPM_SPEED_CHECK) || 1500,
+    alertThrottleTimer: parseInt(process.env.ALERT_THROTTLE_TIMER, 10) || 300,
   },
   remController: {
     url: process.env.REM_CONTROLLER_URL || 'http://127.0.0.1:8080'
