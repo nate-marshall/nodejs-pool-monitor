@@ -18,15 +18,41 @@ let lastAlertTime = 0;
 let failureCount = 0;
 
 // Event handling for incoming MQTT messages
+mqttService.on('connect', () => {
+    logService.debug('Connected to MQTT broker');
+    logService.debug('Subscribing to topics...');
+    
+    mqttService.subscribe(config.mqtt.topics.orp, (err) => {
+        if (err) logService.error(`Failed to subscribe to ORP topic: ${err.message}`);
+        else logService.debug(`Subscribed to ORP topic: ${config.mqtt.topics.orp}`);
+    });
+
+    mqttService.subscribe(config.mqtt.topics.waterFlow, (err) => {
+        if (err) logService.error(`Failed to subscribe to Water Flow topic: ${err.message}`);
+        else logService.debug(`Subscribed to Water Flow topic: ${config.mqtt.topics.waterFlow}`);
+    });
+
+    mqttService.subscribe(config.mqtt.topics.ph, (err) => {
+        if (err) logService.error(`Failed to subscribe to pH topic: ${err.message}`);
+        else logService.debug(`Subscribed to pH topic: ${config.mqtt.topics.ph}`);
+    });
+
+    mqttService.subscribe(config.mqtt.topics.rpm, (err) => {
+        if (err) logService.error(`Failed to subscribe to RPM topic: ${err.message}`);
+        else logService.debug(`Subscribed to RPM topic: ${config.mqtt.topics.rpm}`);
+    });
+});
+
 mqttService.on('message', (topic, message) => {
+    logService.debug(`Received message on topic ${topic}: ${message.toString()}`);
     try {
         const parsedMessage = JSON.parse(message.toString());
         if (topic === config.mqtt.topics.orp) {
             poolState.orpLevel = parsedMessage.orpLevel;
             logService.debug(`Received ORP level: ${poolState.orpLevel}`);
         } else if (topic === config.mqtt.topics.waterFlow) {
-            poolState.waterFlow = message.toString() === 'true';
-            logService.debug(`Received water flow status: ${poolState.waterFlow}`);
+            poolState.waterFlow = message.toString() === 'true';  // Ensuring it is boolean
+            logService.debug(`Water flow is now: ${poolState.waterFlow}`);
         } else if (topic === config.mqtt.topics.ph) {
             poolState.phLevel = parsedMessage.pHLevel;
             logService.debug(`Received pH level: ${poolState.phLevel}`);
