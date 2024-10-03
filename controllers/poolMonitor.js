@@ -25,7 +25,7 @@ mqttService.on('message', (topic, message) => {
             poolState.orpLevel = parsedMessage.orpLevel;
             logService.debug(`Received ORP level: ${poolState.orpLevel}`);
         } else if (topic === config.mqtt.topics.waterFlow) {
-            poolState.waterFlow = parsedMessage.name;
+            poolState.waterFlow = message.toString() === 'true';
             logService.debug(`Received water flow status: ${poolState.waterFlow}`);
         } else if (topic === config.mqtt.topics.ph) {
             poolState.phLevel = parsedMessage.pHLevel;
@@ -84,7 +84,7 @@ async function sendAlertAndReset(message, orpLevel, phLevel) {
 }
 
 function checkPumpAndWaterFlow(currentTime) {
-    if (poolState.rpm > config.monitoring.pumpRpmSpeed && poolState.waterFlow !== 'on') {
+    if (poolState.rpm > config.monitoring.pumpRpmSpeed && poolState.waterFlow !== true) {
         logService.warn('Pump is running but no water flow detected. Resetting flow switch...');
         sendRemResetCommand();
         lastAlertTime = currentTime;
