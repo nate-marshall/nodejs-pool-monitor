@@ -10,7 +10,8 @@
     "test": "mocha",
     "format": "prettier --write '**/*.js'",
     "build": "npm run lint && npm run format && npm run test",
-    "release": "standard-version"
+    "release": "standard-version",
+    "prepare": "husky install"
   },
   "dependencies": {
     "axios": "^1.7.3",
@@ -23,7 +24,7 @@
     "chai": "^4.3.7",
     "eslint": "^9.9.0",
     "globals": "^15.9.0",
-    "husky": "^8.0.3",
+    "husky": "^8.0.0",
     "lint-staged": "^15.2.10",
     "mocha": "^10.2.0",
     "nodemon": "^3.1.4",
