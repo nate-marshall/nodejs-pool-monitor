@@ -243,7 +243,7 @@ function startMonitoring() {
                 rpm: rpm,
                 waterFlow: waterFlow
             }
-        });
+        }));
         poolState.previousOrpLevel = orpLevel;
         poolState.previousPhLevel = phLevel;
     }, delay);
