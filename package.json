@@ -1,6 +1,6 @@
 {
   "name": "nodejs-pool-monitor",
-  "version": "1.0.16",
+  "version": "1.0.17",
   "description": "Node.js app for monitoring pool parameters via MQTT.",
   "main": "index.js",
   "scripts": {
