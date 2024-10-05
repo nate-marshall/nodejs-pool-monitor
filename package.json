@@ -1,6 +1,7 @@
 {
   "name": "nodejs-pool-monitor",
-  "version": "1.0.17",
+  "version": "1.0.18",
+  "license": "MIT",
   "description": "Node.js app for monitoring pool parameters via MQTT.",
   "main": "index.js",
   "scripts": {
@@ -11,7 +12,7 @@
     "format": "prettier --write .",
     "build": "npm run lint && npm run format && npm run test",
     "release": "standard-version",
-    "prepare": "husky install"
+    "prepare": "if [ \"$NODE_ENV\" != \"production\" ]; then husky install; fi"
   },
   "dependencies": {
     "axios": "^1.7.3",
