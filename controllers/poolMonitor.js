@@ -236,7 +236,7 @@ function startMonitoring() {
         }
         logService.debug(`Checking pump and water flow: RPM=${poolState.rpm}, Water Flow=${poolState.waterFlow}`);
         checkPumpAndWaterFlow(currentTime);
-        logService.info({
+        logService.info(JSON.stringify({
             metrics: {
                 orp: orpLevel,
                 ph: phLevel,
