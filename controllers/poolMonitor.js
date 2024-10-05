@@ -59,20 +59,15 @@ mqttService.on('message', (topic, message) => {
         } else if (topic === config.mqtt.topics.rpm) {
             poolState.rpm = parsedMessage.rpm;
             logService.debug(`Received RPM: ${poolState.rpm}`);
+
             if (poolState.rpm > config.monitoring.pumpRpmSpeed && !monitoringIntervalId) {
                 logService.debug('Starting monitoring...');
-                startMonitoring(); 
+                startMonitoring();
+            } else if (poolState.rpm == 0) {
+                logService.debug('Stopping monitoring...');
+                stopMonitoring();
             }
-            else if (poolState.rpm == 0) {
-                if (monitoringIntervalId) {
-                    clearInterval(monitoringIntervalId);
-                    monitoringIntervalId = null;
-                    logService.info('Pump stopped so we are stopping monitoring.');
-                } else {
-                    logService.info('Pump is not running.');
-                }
-            }
-        } 
+        }
     } catch (error) {
         logService.error(`Failed to parse MQTT message: ${error.message}`);
     }
@@ -156,25 +151,45 @@ function checkPumpAndWaterFlow(currentTime) {
     const throttleDuration = (process.env.ALERT_THROTTLE_TIMER || 30) * 1000;
     const timeSinceLastAlert = currentTime - lastAlertTime;
 
+    logService.debug(`Checking conditions: RPM=${poolState.rpm}, Water Flow=${poolState.waterFlow}, Threshold=${config.monitoring.pumpRpmSpeed}`);
+
     if (timeSinceLastAlert < throttleDuration) {
         logService.info(`Reset command throttled for ${process.env.ALERT_THROTTLE_TIMER || 30} seconds. Waiting before sending again.`);
-        return;  // Exit early if still within the throttle window
+        return;
     }
 
-    logService.debug(`Checking conditions: RPM=${poolState.rpm}, Water Flow=${poolState.waterFlow}, Threshold=${config.monitoring.pumpRpmSpeed}`);
-    
-    if (poolState.rpm > config.monitoring.pumpRpmSpeed && poolState.waterFlow == 'off') {
-        logService.warn('Pump IS running but no water flow detected. Resetting flow switch...');
+    if (poolState.rpm > config.monitoring.pumpRpmSpeed && poolState.waterFlow === 'off') {
+        logService.warn('Pump IS running but water flow is NOT detected. Resetting flow switch.');
         sendFlowSwitchResetCommand();
         lastAlertTime = currentTime;
-    } else if (poolState.rpm == 0 && poolState.waterFlow == 'off') {
-        logService.warn('Pump is NOT running but water flow detected. Resetting flow switch...');
+
+    } else if (poolState.rpm < config.monitoring.pumpRpmSpeed && poolState.waterFlow === 'on') {
+        logService.warn('Pump IS running at low speed and water flow IS detected. Resetting flow switch.');
         sendFlowSwitchResetCommand();
         lastAlertTime = currentTime;
-    } else if (poolState.rpm < config.monitoring.pumpRpmSpeed && poolState.waterFlow == 'off') {
-        logService.debug('Pump is not running.');
+
+    } else if (poolState.rpm == 0 && poolState.waterFlow === 'off') {
+        logService.warn('Pump is NOT running and water flow is off. Stopping monitoring.');
+        sendFlowSwitchResetCommand();
+        lastAlertTime = currentTime;
+        stopMonitoring();  // Stop monitoring here
+
+    } else if (poolState.rpm < config.monitoring.pumpRpmSpeed && poolState.waterFlow === 'off') {
+        logService.warn('Pump and water flow are below thresholds. Stopping monitoring.');
+        stopMonitoring();
     } else {
         logService.debug('All valid conditions met. No action taken.');
+    }
+}
+
+
+function stopMonitoring() {
+    if (monitoringIntervalId) {
+        clearInterval(monitoringIntervalId);
+        monitoringIntervalId = null;
+        logService.info('Monitoring stopped.');
+    } else {
+        logService.info('Monitoring was not running.');
     }
 }
 
@@ -235,7 +250,7 @@ function startMonitoring() {
         poolState.previousOrpLevel = orpLevel;
         poolState.previousPhLevel = phLevel;
     }, delay);
-    logService.info('Pump started and will start monitoring with a delay of ' + delayInSeconds + ' seconds.');
+    logService.info('Pump running at ' + poolState.rpm + ' RPM and will start monitoring with a delay of ' + delayInSeconds + ' seconds.');
 }
 
 module.exports = {

@@ -1,6 +1,6 @@
 {
   "name": "nodejs-pool-monitor",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Your app description",
   "main": "index.js",
   "scripts": {
