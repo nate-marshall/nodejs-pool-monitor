@@ -50,28 +50,34 @@ mqttService.on('message', (topic, message) => {
         if (topic === config.mqtt.topics.orp) {
             poolState.orpLevel = parsedMessage.orpLevel;
             logService.debug(`Received ORP level: ${poolState.orpLevel}`);
-        } else if (topic === config.mqtt.topics.waterFlow) {
-            poolState.waterFlow = message.toString() === 'true';  // Ensuring it is boolean
-            logService.debug(`Water flow is now: ${poolState.waterFlow}`);
         } else if (topic === config.mqtt.topics.ph) {
             poolState.phLevel = parsedMessage.pHLevel;
             logService.debug(`Received pH level: ${poolState.phLevel}`);
+        } else if (topic === config.mqtt.topics.waterFlow) {
+            poolState.waterFlow = message.toString().replace(/['"]+/g, '');
+            logService.debug(`Water flow: ${poolState.waterFlow}`);
         } else if (topic === config.mqtt.topics.rpm) {
             poolState.rpm = parsedMessage.rpm;
             logService.debug(`Received RPM: ${poolState.rpm}`);
             if (poolState.rpm > config.monitoring.pumpRpmSpeed && !monitoringIntervalId) {
-                startMonitoring();
-            } else if (poolState.rpm === config.monitoring.pumpRpmSpeed && monitoringIntervalId) {
-                logService.info('Pump stopped. Stopping monitoring.');
-                stopMonitoring();
+                logService.debug('Starting monitoring...');
+                startMonitoring(); 
             }
-        }
+            else if (poolState.rpm == 0) {
+                if (monitoringIntervalId) {
+                    clearInterval(monitoringIntervalId);
+                    monitoringIntervalId = null;
+                    logService.info('Pump stopped so we are stopping monitoring.');
+                } else {
+                    logService.info('Pump is not running.');
+                }
+            }
+        } 
     } catch (error) {
         logService.error(`Failed to parse MQTT message: ${error.message}`);
     }
 });
 
-// Sending the reset command
 async function sendRemResetCommand() {
     try {
         const response = await axios.put(`${config.remController.url}/config/reset`, {
@@ -92,7 +98,7 @@ async function sendRemResetCommand() {
                 'User-Agent': 'Mozilla/5.0'
             }
         });
-        logService.info('Reset command sent successfully.');
+        logService.info('REM reset command sent successfully.');
     } catch (error) {
         const errorMessage = `Failed to send reset command: ${error.message}`;
         logService.error(errorMessage);
@@ -101,8 +107,45 @@ async function sendRemResetCommand() {
     }
 }
 
-// Sending an alert and resetting
-async function sendAlertAndReset(message, orpLevel, phLevel) {
+async function sendFlowSwitchResetCommand() {
+    try {
+        const response = await axios.put(`${config.remController.url}/config/gpio/pin/1/29`, {
+            header: { name: "GPIO Header", id: 1 },
+            id: 29,
+            isActive: true,
+            gpioId: 5,
+            pinoutName: 5,
+            name: "flow",
+            direction: "input",
+            isInverted: false,
+            initialState: "last",
+            sequenceOnDelay: 0,
+            sequenceOffDelay: 0,
+            debounceTimeout: 5000,
+            pin: { headerId: 1, id: 29 },
+            connection: { name: "homeassistantmqtt" },
+            sendValue: "state",
+            propertyDesc: "nixie-single-body/state/waterFlow"
+        }, {
+            headers: {
+                'Accept': 'application/json, text/javascript, */*; q=0.01',
+                'Content-Type': 'application/json; charset=UTF-8',
+                'Origin': config.remController.url,
+                'Referer': `${config.remController.url}/`,
+                'User-Agent': 'Mozilla/5.0'
+            }
+        });
+        logService.info('Flow switch reset command sent successfully.');
+    } catch (error) {
+        const errorMessage = `Failed to send flow switch reset command: ${error.message}`;
+        logService.error(errorMessage);
+        alertService.sendAlert(errorMessage);
+        logService.info(`Alert sent to Mattermost: ${errorMessage}`);
+    }
+}
+
+
+async function sendRemAlertAndReset(message, orpLevel, phLevel) {
     const alertMessage = `${message} ORP: ${orpLevel}, pH: ${phLevel}`;
     alertService.sendAlert(alertMessage);
     logService.warn(`Alert sent to Mattermost: ${alertMessage}`);
@@ -110,15 +153,33 @@ async function sendAlertAndReset(message, orpLevel, phLevel) {
 }
 
 function checkPumpAndWaterFlow(currentTime) {
-    if (poolState.rpm > config.monitoring.pumpRpmSpeed && poolState.waterFlow !== true) {
-        logService.warn('Pump is running but no water flow detected. Resetting flow switch...');
-        sendRemResetCommand();
+    const throttleDuration = (process.env.ALERT_THROTTLE_TIMER || 30) * 1000;
+    const timeSinceLastAlert = currentTime - lastAlertTime;
+
+    if (timeSinceLastAlert < throttleDuration) {
+        logService.info(`Reset command throttled for ${process.env.ALERT_THROTTLE_TIMER || 30} seconds. Waiting before sending again.`);
+        return;  // Exit early if still within the throttle window
+    }
+
+    logService.debug(`Checking conditions: RPM=${poolState.rpm}, Water Flow=${poolState.waterFlow}, Threshold=${config.monitoring.pumpRpmSpeed}`);
+    
+    if (poolState.rpm > config.monitoring.pumpRpmSpeed && poolState.waterFlow == 'off') {
+        logService.warn('Pump IS running but no water flow detected. Resetting flow switch...');
+        sendFlowSwitchResetCommand();
         lastAlertTime = currentTime;
+    } else if (poolState.rpm == 0 && poolState.waterFlow == 'off') {
+        logService.warn('Pump is NOT running but water flow detected. Resetting flow switch...');
+        sendFlowSwitchResetCommand();
+        lastAlertTime = currentTime;
+    } else if (poolState.rpm < config.monitoring.pumpRpmSpeed && poolState.waterFlow == 'off') {
+        logService.debug('Pump is not running.');
+    } else {
+        logService.debug('All valid conditions met. No action taken.');
     }
 }
 
-// Monitoring function
 function startMonitoring() {
+    logService.debug('Entering startMonitoring function');
     const delayInSeconds = config.monitoring.threshold;
     const delay = delayInSeconds * 1000;
     const tolerance = config.monitoring.tolerance;
@@ -131,6 +192,7 @@ function startMonitoring() {
         return;
     }
     monitoringIntervalId = setInterval(async () => {
+        logService.debug('Inside monitoring interval');
         const { 
             orpLevel,
             phLevel,
@@ -141,7 +203,6 @@ function startMonitoring() {
          } = poolState;
         const currentTime = Date.now();
         const timeSinceLastAlert = currentTime - lastAlertTime;
-
         const orpChanged = Math.abs(previousOrpLevel - orpLevel) > tolerance;
         const phChanged = Math.abs(previousPhLevel - phLevel) > tolerance;
 
@@ -154,13 +215,14 @@ function startMonitoring() {
         // Throttle alerts
         if (failureCount >= maxFailures && timeSinceLastAlert > throttleDuration) {
             try {
-                await sendAlertAndReset('ORP and pH levels have not changed.', orpLevel, phLevel);
+                await sendRemAlertAndReset('ORP and pH levels have not changed.', orpLevel, phLevel);
                 lastAlertTime = currentTime;
                 failureCount = 0;
             } catch (error) {
                 logService.error(`Failed to send alert and reset: ${error.message}`);
             }
         }
+        logService.debug(`Checking pump and water flow: RPM=${poolState.rpm}, Water Flow=${poolState.waterFlow}`);
         checkPumpAndWaterFlow(currentTime);
         logService.info({
             metrics: {
@@ -173,18 +235,7 @@ function startMonitoring() {
         poolState.previousOrpLevel = orpLevel;
         poolState.previousPhLevel = phLevel;
     }, delay);
-    logService.info('Started monitoring with a delay of ' + delayInSeconds + ' seconds.');
-}
-
-
-function stopMonitoring() {
-    if (monitoringIntervalId) {
-        clearInterval(monitoringIntervalId);
-        monitoringIntervalId = null;
-        logService.info('Stopped monitoring.');
-    } else {
-        logService.info('Monitoring was not running.');
-    }
+    logService.info('Pump started and will start monitoring with a delay of ' + delayInSeconds + ' seconds.');
 }
 
 module.exports = {
