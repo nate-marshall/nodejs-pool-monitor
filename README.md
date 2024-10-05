@@ -1,4 +1,3 @@
-
 # Node.js Pool Monitor
 
 Node.js Pool Monitor is a real-time monitoring and alerting system for your pool equipment. It tracks ORP, pH levels, pump RPM, and water flow using MQTT, allowing you to reset specific components automatically when predefined conditions are met. The system integrates with Mattermost to send alerts when necessary.
@@ -30,37 +29,40 @@ Set up the following environment variables for configuration:
 ## Getting Started
 
 1. Clone the repository:
-    ```bash
-    git clone https://github.com/nate-marshall/nodejs-pool-monitor.git
-    ```
+   ```bash
+   git clone https://github.com/nate-marshall/nodejs-pool-monitor.git
+   ```
 2. Install dependencies:
-    ```bash
-    npm install
-    ```
+   ```bash
+   npm install
+   ```
 3. Set up your environment variables in a `.env` file:
-    ```bash
-    cp .env.example .env
-    ```
+
+   ```bash
+   cp .env.example .env
+   ```
+
    Update the values in the `.env` file according to your setup.
 
 4. Start the application:
-    ```bash
-    npm start
-    ```
+   ```bash
+   npm start
+   ```
 
 ## Running in Docker
 
 You can run the pool monitor in Docker:
 
 1. Build the Docker image:
-    ```bash
-    docker build -t nodejs-pool-monitor .
-    ```
+
+   ```bash
+   docker build -t nodejs-pool-monitor .
+   ```
 
 2. Run the Docker container:
-    ```bash
-    docker run -d --env-file .env nodejs-pool-monitor
-    ```
+   ```bash
+   docker run -d --env-file .env nodejs-pool-monitor
+   ```
 
 ## Usage
 

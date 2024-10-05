@@ -12,11 +12,11 @@ module.exports = {
       orp: process.env.MQTT_ORP_TOPIC,
       ph: process.env.MQTT_PH_TOPIC,
       rpm: process.env.MQTT_RPM_TOPIC,
-      waterFlow: process.env.MQTT_WATER_FLOW_TOPIC
-    }
+      waterFlow: process.env.MQTT_WATER_FLOW_TOPIC,
+    },
   },
   mattermost: {
-    webhookUrl: process.env.MATTERMOST_WEBHOOK_URL
+    webhookUrl: process.env.MATTERMOST_WEBHOOK_URL,
   },
   monitoring: {
     threshold: parseInt(process.env.ALERT_INTERVAL, 10) || 10,
@@ -26,6 +26,6 @@ module.exports = {
     alertThrottleTimer: parseInt(process.env.ALERT_THROTTLE_TIMER, 10) || 300,
   },
   remController: {
-    url: process.env.REM_CONTROLLER_URL || 'http://127.0.0.1:8080'
-  }
+    url: process.env.REM_CONTROLLER_URL || 'http://127.0.0.1:8080',
+  },
 };
