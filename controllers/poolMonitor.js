@@ -139,7 +139,6 @@ async function sendFlowSwitchResetCommand() {
     }
 }
 
-
 async function sendRemAlertAndReset(message, orpLevel, phLevel) {
     const alertMessage = `${message} ORP: ${orpLevel}, pH: ${phLevel}`;
     alertService.sendAlert(alertMessage);
@@ -154,7 +153,7 @@ function checkPumpAndWaterFlow(currentTime) {
     logService.debug(`Checking conditions: RPM=${poolState.rpm}, Water Flow=${poolState.waterFlow}, Threshold=${config.monitoring.pumpRpmSpeed}`);
 
     if (timeSinceLastAlert < throttleDuration) {
-        logService.info(`Reset command throttled for ${process.env.ALERT_THROTTLE_TIMER || 30} seconds. Waiting before sending again.`);
+        logService.debug(`Reset command throttled for ${process.env.ALERT_THROTTLE_TIMER || 30} seconds. Waiting before sending again.`);
         return;
     }
 
@@ -172,8 +171,7 @@ function checkPumpAndWaterFlow(currentTime) {
         logService.warn('Pump is NOT running and water flow is off. Stopping monitoring.');
         sendFlowSwitchResetCommand();
         lastAlertTime = currentTime;
-        stopMonitoring();  // Stop monitoring here
-
+        stopMonitoring();
     } else if (poolState.rpm < config.monitoring.pumpRpmSpeed && poolState.waterFlow === 'off') {
         logService.warn('Pump and water flow are below thresholds. Stopping monitoring.');
         stopMonitoring();
@@ -181,7 +179,6 @@ function checkPumpAndWaterFlow(currentTime) {
         logService.debug('All valid conditions met. No action taken.');
     }
 }
-
 
 function stopMonitoring() {
     if (monitoringIntervalId) {
