@@ -157,24 +157,28 @@ function checkPumpAndWaterFlow(currentTime) {
         return;
     }
 
+    // RPM is GREATER than the configured RPM threshold and water flow is OFF
     if (poolState.rpm > config.monitoring.pumpRpmSpeed && poolState.waterFlow === 'off') {
         logService.warn('Pump IS running but water flow is NOT detected. Resetting flow switch.');
         sendFlowSwitchResetCommand();
         lastAlertTime = currentTime;
 
+    // RPM is LESS than the configure RPM threshold and water flow is ON
     } else if (poolState.rpm < config.monitoring.pumpRpmSpeed && poolState.waterFlow === 'on') {
         logService.warn('Pump IS running at low speed and water flow IS detected. Resetting flow switch.');
         sendFlowSwitchResetCommand();
         lastAlertTime = currentTime;
 
+    // RPM is OFF and water flow is OFF
     } else if (poolState.rpm == 0 && poolState.waterFlow === 'off') {
         logService.warn('Pump is NOT running and water flow is off. Stopping monitoring.');
-        sendFlowSwitchResetCommand();
-        lastAlertTime = currentTime;
         stopMonitoring();
+
+    // RPM is LESS than the configured RPM threshold and the water flow is OFF
     } else if (poolState.rpm < config.monitoring.pumpRpmSpeed && poolState.waterFlow === 'off') {
         logService.warn('Pump and water flow are below thresholds. Stopping monitoring.');
         stopMonitoring();
+    
     } else {
         logService.debug('All valid conditions met. No action taken.');
     }
