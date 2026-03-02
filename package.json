@@ -15,7 +15,7 @@
     "prepare": "if [ \"$NODE_ENV\" != \"production\" ]; then husky install; fi"
   },
   "dependencies": {
-    "axios": "^1.7.3",
+    "axios": "^1.13.5",
     "dotenv": "^16.4.5",
     "mqtt": "^5.9.1",
     "winston": "^3.13.1"
